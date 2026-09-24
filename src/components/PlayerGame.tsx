@@ -168,7 +168,18 @@ export function PlayerGame({ code }: { code: string }) {
       <div className="choice-list">{lockTwoChoices.map((choice) => <button key={choice.id} className="chip lock-two-choice" type="button" draggable={lockTwoInteractive} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("lock-two-choice", choice.id); }} onClick={() => updateLockTwo(choice.id)} disabled={!lockTwoInteractive}>{choice.text}</button>)}</div>
     </LockCard>
     <LockCard number={3} title="Trở lại khu phố" active={playable && locks >= 2} locked={locks < 2} unlocked={locks >= 3} hint={shownHint === 3 ? hints[3] : undefined} onHint={() => useHint(3)}>
-      <p>Chạm một hành động, rồi ghép với căn cứ trực tiếp nhất trong hai thẻ.</p><div className="choice-list">{lockThreeActions.map((action) => <button key={action.id} className={`chip ${selected === action.id ? "selected" : ""}`} onClick={() => setSelected(action.id)} disabled={!playable || locks < 2}>{action.text}</button>)}</div><div className="choice-list bases">{lockThreeBases.map((basis) => <button key={basis.id} className="chip" onClick={() => updateLockThree(basis.id)} disabled={!playable || locks < 2}>{basis.text}</button>)}</div>
+      <p>Chạm một hành động, rồi ghép với căn cứ trực tiếp nhất trong hai thẻ. Mỗi hàng sẽ hiện căn cứ đội đã chọn.</p>
+      <div className="matching-board">
+        {lockThreeActions.map((action) => {
+          const basis = lockThreeBases.find((item) => item.id === team.answers.lockThree[action.id]);
+          return <div className="matching-row" role="group" aria-label={`Cặp ghép: ${action.text}`} key={action.id}>
+            <button className={`chip matching-action ${selected === action.id ? "selected" : ""}`} type="button" onClick={() => setSelected(action.id)} disabled={!playable || locks < 2}>{action.text}</button>
+            <span className="matching-arrow" aria-hidden="true">→</span>
+            <p className={`matching-basis ${basis ? "is-filled" : ""}`} aria-live="polite">{basis?.text ?? "Chưa chọn căn cứ"}</p>
+          </div>;
+        })}
+      </div>
+      <div className="choice-list bases">{lockThreeBases.map((basis) => <button key={basis.id} className="chip" type="button" onClick={() => updateLockThree(basis.id)} disabled={!playable || locks < 2}>{basis.text}</button>)}</div>
     </LockCard>
     {(session.status === "solutions" || locks === 3) && <section className="solution-card"><p className="eyebrow">HỒ SƠ ĐÃ HOÀN TẤT</p><h2>Lời giải then chốt</h2>{[1, 2, 3].map((lock) => <p key={lock}>{solutions[lock as 1 | 2 | 3]}</p>)}</section>}
   </main>;

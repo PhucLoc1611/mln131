@@ -222,4 +222,38 @@ describe("PlayerGame – Khóa 1", () => {
     });
     expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PATCH")).toHaveLength(1);
   });
+
+  it("hiển thị căn cứ đã ghép tại đúng hàng hành động của Khóa 3", async () => {
+    const user = userEvent.setup();
+    const unlockedAnswers: Answers = {
+      lockOne: { natural: "origins", cognitive: "origins", psychological: "origins", historical: "properties", mass: "properties", political: "properties" },
+      lockTwo: { belief: "respect-both", distinction: "separate-misuse" },
+      lockThree: {},
+    };
+    let savedTeam: TeamProgress = { ...makeTeam(unlockedAnswers), completedAt: { 1: 1, 2: 2 } };
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, options?: RequestInit) => {
+      if (options?.method === "PATCH") {
+        const payload = JSON.parse(String(options.body)) as { answers: Answers };
+        savedTeam = applyCompletionTimes({ ...savedTeam, answers: payload.answers }, Date.now());
+        return { ok: true, json: async () => ({ team: savedTeam }) } as Response;
+      }
+      return { ok: true, json: async () => ({ session: makeSession(savedTeam) }) } as Response;
+    }));
+    window.localStorage.setItem("three-locks:ABC123", savedTeam.id);
+    render(<PlayerGame code="ABC123" />);
+
+    const inclusionName = "Sửa quy định tham gia: không loại một người chỉ vì khác tôn giáo; khuyến khích cùng đóng góp cho hoạt động chung.";
+    const voluntaryName = "Sửa thông báo: việc tham gia nghi lễ tín ngưỡng là tự nguyện.";
+    const inclusionRow = await screen.findByRole("group", { name: `Cặp ghép: ${inclusionName}` });
+    const voluntaryRow = screen.getByRole("group", { name: `Cặp ghép: ${voluntaryName}` });
+    expect(within(inclusionRow).getByText("Chưa chọn căn cứ")).toBeVisible();
+
+    await user.click(within(inclusionRow).getByRole("button", { name: inclusionName }));
+    await user.click(screen.getByRole("button", { name: "Thực hiện chính sách đại đoàn kết dân tộc." }));
+
+    await waitFor(() => {
+      expect(within(inclusionRow).getByText("Thực hiện chính sách đại đoàn kết dân tộc.")).toBeVisible();
+    });
+    expect(within(voluntaryRow).getByText("Chưa chọn căn cứ")).toBeVisible();
+  });
 });
