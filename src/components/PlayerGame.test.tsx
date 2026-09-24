@@ -118,6 +118,9 @@ describe("PlayerGame – Khóa 1", () => {
       expect(screen.getByText("Chìa khóa 1 đã mở!")).toBeVisible();
     });
     expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PATCH")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Nguồn gốc nhận thức" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Xếp thẻ đã chọn vào Nguồn gốc của tôn giáo" })).toBeDisabled();
+    expect(submit).toBeDisabled();
   });
 
   it("kéo thẻ vào cột đích mà không lưu đáp án trước khi nộp", async () => {
@@ -173,12 +176,50 @@ describe("PlayerGame – Khóa 1", () => {
     const submit = screen.getByRole("button", { name: "Nộp Khóa 1" });
     await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
     await act(async () => { fireEvent.click(submit); await Promise.resolve(); });
-    expect(screen.getByRole("button", { name: "chỉ tôn trọng người có tín ngưỡng" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Thay đoạn: chỉ tôn trọng người có tín ngưỡng" })).toBeEnabled();
 
     await act(async () => {
       resolveStaleRefresh?.({ ok: true, json: async () => ({ session: makeSession(beforeSubmit) }) } as Response);
       await Promise.resolve();
     });
-    expect(screen.getByRole("button", { name: "chỉ tôn trọng người có tín ngưỡng" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Thay đoạn: chỉ tôn trọng người có tín ngưỡng" })).toBeEnabled();
+  });
+
+  it("thả thẻ sửa vào đoạn sai của Khóa 2", async () => {
+    const dataTransfer = {
+      data: new Map<string, string>(),
+      effectAllowed: "",
+      setData(type: string, value: string) { this.data.set(type, value); },
+      getData(type: string) { return this.data.get(type) ?? ""; },
+    };
+    const solvedLockOne: Answers = {
+      lockOne: { natural: "origins", cognitive: "origins", psychological: "origins", historical: "properties", mass: "properties", political: "properties" },
+      lockTwo: {},
+      lockThree: {},
+    };
+    let savedTeam: TeamProgress = { ...makeTeam(solvedLockOne), completedAt: { 1: 1 } };
+    const fetchMock = vi.fn(async (_url: string, options?: RequestInit) => {
+      if (options?.method === "PATCH") {
+        const payload = JSON.parse(String(options.body)) as { answers: Answers };
+        savedTeam = applyCompletionTimes({ ...savedTeam, answers: payload.answers }, Date.now());
+        return { ok: true, json: async () => ({ team: savedTeam }) } as Response;
+      }
+      return { ok: true, json: async () => ({ session: makeSession(savedTeam) }) } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    window.localStorage.setItem("three-locks:ABC123", savedTeam.id);
+    render(<PlayerGame code="ABC123" />);
+
+    const source = await screen.findByRole("button", { name: "tôn trọng, bảo đảm quyền tự do tín ngưỡng và không tín ngưỡng của nhân dân" });
+    const target = screen.getByRole("button", { name: "Thay đoạn: chỉ tôn trọng người có tín ngưỡng" });
+    fireEvent.dragStart(source, { dataTransfer });
+    fireEvent.dragEnter(target, { dataTransfer });
+    expect(target).toHaveClass("is-drop-target");
+    fireEvent.drop(target, { dataTransfer });
+
+    await waitFor(() => {
+      expect(target).toHaveTextContent("tôn trọng, bảo đảm quyền tự do tín ngưỡng và không tín ngưỡng của nhân dân");
+    });
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PATCH")).toHaveLength(1);
   });
 });
