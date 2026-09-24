@@ -31,6 +31,8 @@ npm test -- --run
 npm run build
 ~~~
 
+Hướng dẫn vận hành cho MC và đội: [docs/HUONG-DAN-CHOI.md](docs/HUONG-DAN-CHOI.md).
+
 Checklist chạy buổi học:
 
 - [ ] MC tạo phiên, gửi mã hoặc đường dẫn cho các đội.

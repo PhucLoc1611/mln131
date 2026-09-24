@@ -88,9 +88,12 @@ export function PlayerGame({ code }: { code: string }) {
 
   const locks = completedLocks(team);
   const playable = session.status === "active" && (!session.endsAt || session.endsAt > Date.now());
-  const updateLockOne = (group: "origins" | "properties") => {
-    if (!selected) return setNotice("Hãy chọn một thẻ trước.");
-    const answers = { ...team.answers, lockOne: { ...team.answers.lockOne, [selected]: group } };
+  const updateLockOne = (group: "origins" | "properties" | "unclassified") => {
+    const card = lockOneCards.find((item) => item.id === selected);
+    if (!card) return setNotice("Hãy chọn một thẻ để xếp.");
+    const { [card.id]: _removed, ...remainingCards } = team.answers.lockOne;
+    const lockOne = group === "unclassified" ? remainingCards : { ...remainingCards, [card.id]: group };
+    const answers = { ...team.answers, lockOne };
     setSelected(null); void save(answers);
   };
   const updateLockTwo = (choice: string) => {
@@ -103,6 +106,11 @@ export function PlayerGame({ code }: { code: string }) {
     const answers = { ...team.answers, lockThree: { ...team.answers.lockThree, [selected]: choice as never } };
     setSelected(null); void save(answers);
   };
+  const unclassifiedCards = lockOneCards.filter((card) => !team.answers.lockOne[card.id]);
+  const originCards = lockOneCards.filter((card) => team.answers.lockOne[card.id] === "origins");
+  const propertyCards = lockOneCards.filter((card) => team.answers.lockOne[card.id] === "properties");
+  const selectedLockOneCard = lockOneCards.find((card) => card.id === selected);
+  const classifiedCount = lockOneCards.length - unclassifiedCards.length;
 
   return <main className="player-shell">
     <header className="player-header"><div><p className="eyebrow">ĐỘI {team.name}</p><LockProgress completed={locks} /></div><Countdown endsAt={session.endsAt} /></header>
@@ -111,8 +119,14 @@ export function PlayerGame({ code }: { code: string }) {
     {session.status === "announced" && <p className="banner warning">Thời gian đã kết thúc. MC đang công bố kết quả.</p>}
     <p className="live-notice" role="status">{notice}</p>
     <LockCard number={1} title="Khôi phục hồ sơ" active={playable} unlocked={locks >= 1} hint={shownHint === 1 ? hints[1] : undefined} onHint={() => useHint(1)}>
-      <p>Chạm một thẻ, rồi chạm ngăn thích hợp để xếp.</p><div className="chip-grid">{lockOneCards.map((card) => <button key={card.id} className={`chip ${selected === card.id ? "selected" : ""} ${team.answers.lockOne[card.id] ? "answered" : ""}`} onClick={() => setSelected(card.id)} disabled={!playable}>{card.text}</button>)}</div>
-      <div className="bins"><button onClick={() => updateLockOne("origins")} disabled={!playable}>Nguồn gốc của tôn giáo</button><button onClick={() => updateLockOne("properties")} disabled={!playable}>Tính chất của tôn giáo</button></div>
+      <p>Chạm một thẻ, rồi chạm tên ngăn đích để xếp. Bạn luôn có thể chuyển lại thẻ đã xếp.</p>
+      <p className="classification-progress" aria-live="polite">Đã xếp {classifiedCount}/6 thẻ</p>
+      <p className="move-status" aria-live="polite">{selectedLockOneCard ? <>Đang di chuyển: <strong>{selectedLockOneCard.text}</strong>. Chọn một ngăn bên dưới.</> : "Chọn một thẻ để di chuyển."}</p>
+      <div className="classification-board">
+        <ClassificationColumn title="Chưa phân loại" count={unclassifiedCards.length} total={6} cards={unclassifiedCards} selected={selected} destination="unclassified" playable={playable} onSelect={setSelected} onMove={updateLockOne} />
+        <ClassificationColumn title="Nguồn gốc của tôn giáo" count={originCards.length} total={3} cards={originCards} selected={selected} destination="origins" playable={playable} onSelect={setSelected} onMove={updateLockOne} />
+        <ClassificationColumn title="Tính chất của tôn giáo" count={propertyCards.length} total={3} cards={propertyCards} selected={selected} destination="properties" playable={playable} onSelect={setSelected} onMove={updateLockOne} />
+      </div>
     </LockCard>
     <LockCard number={2} title="Sửa thông điệp bị sai" active={playable && locks >= 1} locked={locks < 1} unlocked={locks >= 2} hint={shownHint === 2 ? hints[2] : undefined} onHint={() => useHint(2)}>
       <p className="message">“Tôn trọng tự do tín ngưỡng nghĩa là <button className={`inline-choice ${selected === "belief" ? "selected" : ""}`} onClick={() => setSelected("belief")} disabled={!playable || locks < 1}>chỉ tôn trọng người có tín ngưỡng</button>. Khi giải quyết vấn đề tôn giáo, có thể <button className={`inline-choice ${selected === "distinction" ? "selected" : ""}`} onClick={() => setSelected("distinction")} disabled={!playable || locks < 1}>xem tín ngưỡng, tôn giáo và việc lợi dụng tín ngưỡng, tôn giáo là một</button>.”</p><div className="choice-list">{lockTwoChoices.map((choice) => <button key={choice.id} className="chip" onClick={() => updateLockTwo(choice.id)} disabled={!playable || locks < 1}>{choice.text}</button>)}</div>
@@ -126,4 +140,26 @@ export function PlayerGame({ code }: { code: string }) {
 
 function LockCard({ number, title, children, active, locked, unlocked, hint, onHint }: { number: number; title: string; children: React.ReactNode; active: boolean; locked?: boolean; unlocked: boolean; hint?: string; onHint: () => void }) {
   return <section className={`lock-card ${locked ? "is-locked" : ""}`} aria-labelledby={`lock-${number}`}><div className="lock-card-head"><span>{unlocked ? "ĐÃ MỞ" : `KHÓA ${number}`}</span><button className="text-button" onClick={onHint} disabled={!active}>Gợi ý</button></div><h2 id={`lock-${number}`}>{title}</h2>{locked ? <p>Hoàn thành khóa trước để mở hồ sơ này.</p> : children}{hint && <p className="hint" role="status">Gợi ý: {hint}</p>}{unlocked && <p className="success">✓ Khóa đã mở — hãy ghi nhớ lời giải.</p>}</section>;
+}
+
+function ClassificationColumn({ title, count, total, cards, selected, destination, playable, onSelect, onMove }: {
+  title: string;
+  count: number;
+  total: number;
+  cards: readonly (typeof lockOneCards)[number][];
+  selected: string | null;
+  destination: "origins" | "properties" | "unclassified";
+  playable: boolean;
+  onSelect: (cardId: string) => void;
+  onMove: (destination: "origins" | "properties" | "unclassified") => void;
+}) {
+  const label = `${title} (${count}/${total})`;
+  return <section className="classification-column" aria-label={label}>
+    <button className="classification-target" type="button" onClick={() => onMove(destination)} disabled={!playable} aria-label={`Xếp thẻ đã chọn vào ${title}`}>
+      <h3>{label}</h3><span>Chọn ngăn này</span>
+    </button>
+    <div className="classification-list" role="list">
+      {cards.map((card) => <button key={card.id} className={`chip classification-card ${selected === card.id ? "selected" : ""}`} type="button" onClick={() => onSelect(card.id)} disabled={!playable}>{card.text}</button>)}
+    </div>
+  </section>;
 }
